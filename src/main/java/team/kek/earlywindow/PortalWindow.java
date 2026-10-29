@@ -15,7 +15,6 @@ import static org.lwjgl.opengl.GL32C.*;
 
 import java.awt.Desktop;
 import java.io.IOException;
-import java.lang.reflect.Constructor;
 import java.net.URI;
 import java.util.Arrays;
 import java.util.List;
@@ -53,6 +52,7 @@ import org.lwjgl.util.tinyfd.TinyFileDialogs;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import team.kek.earlywindow.gl.EarlyFramebuffer;
+import team.kek.earlywindow.gl.GlState;
 import team.kek.earlywindow.gl.QuadShader;
 import team.kek.earlywindow.gl.SimpleFont;
 import team.kek.earlywindow.model.LoadingProgress;
@@ -95,7 +95,7 @@ public class PortalWindow implements ImmediateWindowProvider, AutoCloseable {
     private final PortalFrame frame = new PortalFrame();
     private volatile Consumer<FrameContext> painter = ctx -> frame.paint(ctx, LoadingProgress.ofFml(fmlBars()), 0f, -1f);
     private boolean iconPending;
-    private Constructor<?> vanillaOverlay;
+    private OverlayFactory overlays = new OverlayFactory(Optional.empty(), Optional.empty());
 
     @Override
     public String name() {
@@ -197,6 +197,10 @@ public class PortalWindow implements ImmediateWindowProvider, AutoCloseable {
 
     /** Рисует кадр в {@link #framebuffer} размером {@code width × height}. */
     private void paintFrame(int width, int height) {
+        paintFrame(width, height, painter);
+    }
+
+    private void paintFrame(int width, int height, Consumer<FrameContext> painter) {
         framebuffer.resize(width, height);
         framebuffer.activate();
         glViewport(0, 0, width, height);
@@ -465,28 +469,37 @@ public class PortalWindow implements ImmediateWindowProvider, AutoCloseable {
         height.accept(this.fbHeight);
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public <T> Supplier<T> loadingOverlay(final Supplier<?> mc, final Supplier<?> ri, final Consumer<Optional<Throwable>> ex, final boolean fade) {
         WindowIcon.apply(window);
-        return () -> {
-            try {
-                return (T) vanillaOverlay.newInstance(mc.get(), ri.get(), ex, fade);
-            } catch (ReflectiveOperationException e) {
-                throw new IllegalStateException("Не удалось создать экран загрузки Minecraft", e);
-            }
-        };
+        return overlays.create(mc, ri, ex, fade, this::renderForOverlay);
     }
 
     @Override
     public void updateModuleReads(final ModuleLayer layer) {
-        var mc = layer.findModule("minecraft").orElseThrow();
-        getClass().getModule().addReads(mc);
-        var overlay = Class.forName(mc, "net.minecraft.client.gui.screens.LoadingOverlay");
-        vanillaOverlay = overlay == null ? null : Arrays.stream(overlay.getConstructors()).filter(c -> c.getParameterCount() == 4).findFirst().orElse(null);
-        if (vanillaOverlay == null) {
-            throw new IllegalStateException("Не найден экран загрузки Minecraft");
+        overlays = OverlayFactory.find(layer, getClass().getModule());
+    }
+
+    /**
+     * Мост для {@code PortalOverlay} мода KEK Link: кадр загрузки ресурсов в наш кадровый буфер, на потоке и в
+     * контексте Minecraft, с восстановлением состояния GL. {@code state = {alpha, reloadProgress, collapse, flash}},
+     * все 0…1; прозрачность {@code alpha} оверлей применяет сам при выводе. Возвращает id текстуры кадра (строка 0 —
+     * верх экрана).
+     */
+    public int renderForOverlay(float[] state) {
+        int[] w = new int[1];
+        int[] h = new int[1];
+        glfwGetFramebufferSize(window, w, h);
+        if (w[0] > 0 && h[0] > 0) { // свёрнутое окно — прежний кадр
+            var saved = GlState.saveAndPrepare();
+            try {
+                var progress = LoadingProgress.ofReload(state[1]);
+                paintFrame(w[0], h[0], ctx -> frame.paint(ctx, progress, state[2], state[3]));
+            } finally {
+                saved.restore();
+            }
         }
+        return framebuffer.texture();
     }
 
     @Override
