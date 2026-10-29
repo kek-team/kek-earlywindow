@@ -90,7 +90,8 @@ public class PortalWindow implements ImmediateWindowProvider, AutoCloseable {
     private Runnable repaintTick = () -> {};
     private long nextFrameTime = 0;
     private long startNanos;
-    private volatile Consumer<FrameContext> painter = ctx -> {};
+    private final SceneLayer scene = new SceneLayer();
+    private volatile Consumer<FrameContext> painter = ctx -> scene.paint(ctx, 0f, -1f);
     private boolean iconPending;
     private Constructor<?> vanillaOverlay;
 
