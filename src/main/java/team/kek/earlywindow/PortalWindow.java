@@ -18,6 +18,7 @@ import java.io.IOException;
 import java.lang.reflect.Constructor;
 import java.net.URI;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.StringJoiner;
@@ -54,6 +55,7 @@ import org.slf4j.LoggerFactory;
 import team.kek.earlywindow.gl.EarlyFramebuffer;
 import team.kek.earlywindow.gl.QuadShader;
 import team.kek.earlywindow.gl.SimpleFont;
+import team.kek.earlywindow.model.LoadingProgress;
 
 /**
  * Окно загрузки: создаётся сразу при старте FML, до передачи игре его рисует отдельный поток, после —
@@ -90,14 +92,21 @@ public class PortalWindow implements ImmediateWindowProvider, AutoCloseable {
     private Runnable repaintTick = () -> {};
     private long nextFrameTime = 0;
     private long startNanos;
-    private final SceneLayer scene = new SceneLayer();
-    private volatile Consumer<FrameContext> painter = ctx -> scene.paint(ctx, 0f, -1f);
+    private final PortalFrame frame = new PortalFrame();
+    private volatile Consumer<FrameContext> painter = ctx -> frame.paint(ctx, LoadingProgress.ofFml(fmlBars()), 0f, -1f);
     private boolean iconPending;
     private Constructor<?> vanillaOverlay;
 
     @Override
     public String name() {
         return KekEarlyWindow.NAME;
+    }
+
+    /** Снимок полос прогресса FML. */
+    private static List<LoadingProgress.Bar> fmlBars() {
+        return StartupNotificationManager.getCurrentProgress().stream()
+                .map(m -> new LoadingProgress.Bar(m.name(), m.steps(), m.current(), m.label().getText()))
+                .toList();
     }
 
     /** Чем рисовать кадр; вызывается на потоке, владеющем контекстом GL. */
