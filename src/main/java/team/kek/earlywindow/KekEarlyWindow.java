@@ -17,13 +17,27 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Ранний экран загрузки Искры. Пока своего окна нет — всё делает стандартный {@link DisplayWindow}.
+ * Ранний экран загрузки Искры. Своё окно — {@link PortalWindow}; если оно не поднялось (или задано
+ * {@code -Dkek.earlywindow.fail=1}), все вызовы уходят стандартному {@link DisplayWindow}.
  */
 public class KekEarlyWindow implements ImmediateWindowProvider {
     public static final String NAME = "kekearlywindow";
+    public static final String FAIL_PROPERTY = "kek.earlywindow.fail";
     private static final Logger LOGGER = LoggerFactory.getLogger("KEK EARLYWINDOW");
 
-    private ImmediateWindowProvider fallback;
+    private final ImmediateWindowProvider own;
+    private final Supplier<ImmediateWindowProvider> fallbackFactory;
+    private ImmediateWindowProvider active;
+
+    public KekEarlyWindow() {
+        this(new PortalWindow(), DisplayWindow::new);
+    }
+
+    KekEarlyWindow(ImmediateWindowProvider own, Supplier<ImmediateWindowProvider> fallbackFactory) {
+        this.own = own;
+        this.fallbackFactory = fallbackFactory;
+        this.active = own;
+    }
 
     @Override
     public String name() {
@@ -32,48 +46,67 @@ public class KekEarlyWindow implements ImmediateWindowProvider {
 
     @Override
     public Runnable initialize(String[] arguments) {
-        LOGGER.info("[KEK EARLYWINDOW] провайдер найден");
-        fallback = new DisplayWindow();
-        return fallback.initialize(arguments);
+        if ("1".equals(System.getProperty(FAIL_PROPERTY))) {
+            return fallBack(arguments, "задано " + FAIL_PROPERTY, null);
+        }
+        LOGGER.info("[KEK EARLYWINDOW] своё окно");
+        try {
+            return own.initialize(arguments);
+        } catch (Throwable t) {
+            if (own instanceof AutoCloseable closeable) {
+                try {
+                    closeable.close();
+                } catch (Throwable ignored) {
+                    // окно и так не работает
+                }
+            }
+            return fallBack(arguments, t.toString(), t);
+        }
+    }
+
+    private Runnable fallBack(String[] arguments, String reason, Throwable cause) {
+        LOGGER.warn("[KEK EARLYWINDOW] откат на стандартный экран: {}", reason, cause);
+        active = fallbackFactory.get();
+        return active.initialize(arguments);
     }
 
     @Override
     public void updateFramebufferSize(IntConsumer width, IntConsumer height) {
-        fallback.updateFramebufferSize(width, height);
+        active.updateFramebufferSize(width, height);
     }
 
     @Override
     public long setupMinecraftWindow(IntSupplier width, IntSupplier height, Supplier<String> title, LongSupplier monitor) {
-        return fallback.setupMinecraftWindow(width, height, title, monitor);
+        return active.setupMinecraftWindow(width, height, title, monitor);
     }
 
     @Override
     public boolean positionWindow(Optional<Object> monitor, IntConsumer widthSetter, IntConsumer heightSetter, IntConsumer xSetter, IntConsumer ySetter) {
-        return fallback.positionWindow(monitor, widthSetter, heightSetter, xSetter, ySetter);
+        return active.positionWindow(monitor, widthSetter, heightSetter, xSetter, ySetter);
     }
 
     @Override
     public <T> Supplier<T> loadingOverlay(Supplier<?> mc, Supplier<?> ri, Consumer<Optional<Throwable>> ex, boolean fade) {
-        return fallback.loadingOverlay(mc, ri, ex, fade);
+        return active.loadingOverlay(mc, ri, ex, fade);
     }
 
     @Override
     public void updateModuleReads(ModuleLayer layer) {
-        fallback.updateModuleReads(layer);
+        active.updateModuleReads(layer);
     }
 
     @Override
     public void periodicTick() {
-        fallback.periodicTick();
+        active.periodicTick();
     }
 
     @Override
     public String getGLVersion() {
-        return fallback.getGLVersion();
+        return active.getGLVersion();
     }
 
     @Override
     public void crash(String message) {
-        fallback.crash(message);
+        active.crash(message);
     }
 }

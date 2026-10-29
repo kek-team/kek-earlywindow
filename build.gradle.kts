@@ -22,9 +22,11 @@ dependencies {
     compileOnly("net.neoforged.fancymodloader:loader:$earlydisplayVersion")
     // Только запасной DisplayWindow: при сбое своего окна все вызовы уходят ему.
     compileOnly("net.neoforged.fancymodloader:earlydisplay:$earlydisplayVersion")
-    for (m in listOf("lwjgl", "lwjgl-glfw", "lwjgl-opengl", "lwjgl-stb")) {
+    for (m in listOf("lwjgl", "lwjgl-glfw", "lwjgl-opengl", "lwjgl-stb", "lwjgl-tinyfd")) {
         compileOnly("org.lwjgl:$m:$lwjglVersion")
+        testImplementation("org.lwjgl:$m:$lwjglVersion")
     }
+    compileOnly("net.sf.jopt-simple:jopt-simple:5.0.4")
     compileOnly("org.slf4j:slf4j-api:2.0.9")
     compileOnly("org.jetbrains:annotations:24.1.0")
 
