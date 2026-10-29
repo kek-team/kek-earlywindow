@@ -32,7 +32,8 @@ public final class LoadingProgress {
             "Scanning mod candidates", 0.05f,
             "Loading language providers", 0.08f,
             "Launching minecraft", 0.09f,
-            "Initializing Game Graphics", 0.10f);
+            "Initializing Game Graphics", 0.10f,
+            "Loading mods", 0.10f);
 
     private LoadingProgress() {}
 

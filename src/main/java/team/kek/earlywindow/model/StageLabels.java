@@ -25,6 +25,7 @@ public final class StageLabels {
             Map.entry("Scanning mod candidates", "Поиск модов"),
             Map.entry("Launching minecraft", "Запуск Minecraft"),
             Map.entry("Initializing Game Graphics", "Запуск Minecraft"),
+            Map.entry("Loading mods", "Загрузка модов"),
             Map.entry("Mod Construction", "Загрузка модов"),
             Map.entry("Registry initialization", "Реестры"),
             Map.entry("Config loading", "Настройки модов"),

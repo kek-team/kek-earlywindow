@@ -13,7 +13,7 @@ import team.kek.earlywindow.model.LoadingProgress.Bar;
 class LoadingProgressTest {
     @Test
     void beforeConstructionIsEarly() {
-        var p = ofFml(List.of(new Bar("EARLY", 0, 0, "Loading mods")));
+        var p = ofFml(List.of(new Bar("EARLY", 0, 0, "Something early")));
         assertEquals(0f, p.fraction(), 1e-3f);
         assertFalse(p.known());
         assertEquals("Подготовка", p.text());
@@ -26,6 +26,9 @@ class LoadingProgressTest {
         assertTrue(discovering.fraction() > 0f && discovering.fraction() < graphics.fraction());
         assertEquals(0.10f, graphics.fraction(), 1e-3f);
         assertEquals("Поиск модов", discovering.text());
+        var mods = ofFml(List.of(new Bar("EARLY", 0, 0, "Loading mods")));
+        assertEquals(0.10f, mods.fraction(), 1e-3f);
+        assertEquals("Загрузка модов", mods.text());
     }
 
     @Test

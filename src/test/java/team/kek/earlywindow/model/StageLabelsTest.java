@@ -28,6 +28,7 @@ class StageLabelsTest {
         check("Подготовка", "Loaded language provider javafml 4.0");
         check("Запуск Minecraft", "Launching minecraft");
         check("Запуск Minecraft", "Initializing Game Graphics");
+        check("Загрузка модов", "Loading mods"); // ClientModLoader NeoForge перед загрузкой модов
     }
 
     @Test
