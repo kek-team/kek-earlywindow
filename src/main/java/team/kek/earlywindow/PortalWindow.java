@@ -188,7 +188,9 @@ public class PortalWindow implements ImmediateWindowProvider, AutoCloseable {
             framebuffer.draw();
             glfwSwapBuffers(window);
         } catch (Throwable t) {
-            LOGGER.error("Ошибка кадра", t);
+            // Сбой повторился бы на каждом кадре (буфер остался бы в «building»): дальше — только цвет фона, игра грузится.
+            LOGGER.error("Ошибка кадра, дальше — пустой фон", t);
+            painter = ctx -> {};
         } finally {
             if (this.windowTick != null) glfwMakeContextCurrent(0); // отдаём контекст, если рисуем не на главном потоке
             renderLock.release();
@@ -207,7 +209,8 @@ public class PortalWindow implements ImmediateWindowProvider, AutoCloseable {
         glClearColor((BACKGROUND >> 16 & 0xFF) / 255f, (BACKGROUND >> 8 & 0xFF) / 255f, (BACKGROUND & 0xFF) / 255f, 1f);
         glClear(GL_COLOR_BUFFER_BIT);
         glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        // Альфа кадра остаётся 1: оверлей выводит кадр со смешиванием, и полоса иначе темнела бы и просвечивала раньше.
+        glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
         painter.accept(new FrameContext(width, height, System.nanoTime() - startNanos, quads, font));
         framebuffer.deactivate();
     }

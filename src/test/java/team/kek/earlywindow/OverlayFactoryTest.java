@@ -63,6 +63,48 @@ class OverlayFactoryTest {
         assertTrue(((FakeVanilla) overlay.get()).fade);
     }
 
+    /** Сигнатура мода разошлась с провайдером: {@code invoke} бросит IllegalArgumentException. */
+    public static final class WrongPortal {
+        public static Supplier<Object> newInstance(String a, String b, String c, String d) {
+            return () -> "portal";
+        }
+    }
+
+    /** Мод нашёлся, но его экран не создаётся. */
+    public static final class BrokenPortal {
+        public static Supplier<Object> newInstance(Supplier<?> mc, Supplier<?> ri, Consumer<Optional<Throwable>> ex, ToIntFunction<float[]> scene) {
+            return () -> {
+                throw new NoClassDefFoundError("net/minecraft/Changed");
+            };
+        }
+
+        public static Supplier<Object> thrower(Supplier<?> mc, Supplier<?> ri, Consumer<Optional<Throwable>> ex, ToIntFunction<float[]> scene) {
+            throw new LinkageError("мод другой версии");
+        }
+    }
+
+    private static Optional<Method> method(Class<?> c, String name) {
+        return java.util.Arrays.stream(c.getMethods()).filter(m -> m.getName().equals(name)).findFirst();
+    }
+
+    @Test
+    void wrongPortalSignatureFallsBackToVanilla() {
+        Supplier<Object> overlay = new OverlayFactory(method(WrongPortal.class, "newInstance"), vanilla()).create(() -> "mc", () -> "ri", t -> {}, true, s -> 0);
+        assertTrue(overlay.get() instanceof FakeVanilla);
+    }
+
+    @Test
+    void portalFactoryErrorFallsBackToVanilla() {
+        Supplier<Object> overlay = new OverlayFactory(method(BrokenPortal.class, "thrower"), vanilla()).create(() -> "mc", () -> "ri", t -> {}, true, s -> 0);
+        assertTrue(overlay.get() instanceof FakeVanilla);
+    }
+
+    @Test
+    void portalConstructorErrorFallsBackToVanilla() {
+        Supplier<Object> overlay = new OverlayFactory(method(BrokenPortal.class, "newInstance"), vanilla()).create(() -> "mc", () -> "ri", t -> {}, true, s -> 0);
+        assertTrue(overlay.get() instanceof FakeVanilla);
+    }
+
     @Test
     void noOverlayIsClearError() {
         var e = assertThrows(IllegalStateException.class,

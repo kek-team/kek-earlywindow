@@ -53,7 +53,15 @@ final class OverlayFactory {
      * {@code minecraft}. Модулю провайдера ({@code self}) даёт читать оба.
      */
     static OverlayFactory find(ModuleLayer layer, Module self) {
-        var portal = layer.modules().stream()
+        var factory = new OverlayFactory(guarded(() -> findPortal(layer, self)), guarded(() -> findVanilla(layer, self)));
+        if (factory.kind() != Kind.PORTAL) {
+            LOGGER.warn("[KEK EARLYWINDOW] оверлей KEK Link не найден — ванильный экран");
+        }
+        return factory;
+    }
+
+    private static Optional<Method> findPortal(ModuleLayer layer, Module self) {
+        return layer.modules().stream()
                 .filter(m -> m.getPackages().contains(LINK_PACKAGE))
                 .findFirst()
                 .map(m -> {
@@ -63,42 +71,63 @@ final class OverlayFactory {
                 .flatMap(c -> Arrays.stream(c.getMethods())
                         .filter(m -> m.getName().equals("newInstance") && Modifier.isStatic(m.getModifiers()) && m.getParameterCount() == 4)
                         .findFirst());
-        var vanilla = layer.findModule("minecraft")
+    }
+
+    private static Optional<Constructor<?>> findVanilla(ModuleLayer layer, Module self) {
+        return layer.findModule("minecraft")
                 .map(m -> {
                     self.addReads(m);
                     return Class.forName(m, VANILLA_CLASS);
                 })
                 .flatMap(c -> Arrays.stream(c.getConstructors()).filter(k -> k.getParameterCount() == 4).findFirst());
-        var factory = new OverlayFactory(portal, vanilla.map(k -> (Constructor<?>) k));
-        if (factory.kind() != Kind.PORTAL) {
-            LOGGER.warn("[KEK EARLYWINDOW] оверлей KEK Link не найден — ванильный экран");
+    }
+
+    /** Классы мода и игры могут не загрузиться (LinkageError): игра должна запуститься и без оверлея провайдера. */
+    private static <R> Optional<R> guarded(Supplier<Optional<R>> find) {
+        try {
+            return find.get();
+        } catch (Throwable t) {
+            LOGGER.warn("[KEK EARLYWINDOW] оверлей не найден: {}", t.toString());
+            return Optional.empty();
         }
-        return factory;
+    }
+
+    /** Мод обновляется с паком отдельно от провайдера: любой сбой его оверлея — ванильный экран, а не вылет. */
+    @SuppressWarnings("unchecked")
+    <T> Supplier<T> create(Supplier<?> mc, Supplier<?> ri, Consumer<Optional<Throwable>> ex, boolean fade, ToIntFunction<float[]> scene) {
+        return switch (kind()) {
+            case PORTAL -> {
+                Supplier<T> fallback = vanilla(mc, ri, ex, fade);
+                try {
+                    Supplier<T> overlay = (Supplier<T>) portal.orElseThrow().invoke(null, mc, ri, ex, scene);
+                    yield () -> {
+                        try {
+                            return overlay.get();
+                        } catch (Throwable t) {
+                            LOGGER.error("[KEK EARLYWINDOW] оверлей KEK Link не создан — ванильный экран", t);
+                            return fallback.get();
+                        }
+                    };
+                } catch (Throwable t) {
+                    LOGGER.error("[KEK EARLYWINDOW] оверлей KEK Link не создан — ванильный экран", t);
+                    yield fallback;
+                }
+            }
+            case VANILLA -> vanilla(mc, ri, ex, fade);
+            case NONE -> throw new IllegalStateException("Не найден экран загрузки Minecraft: нет ни PortalOverlay KEK Link, ни LoadingOverlay");
+        };
     }
 
     @SuppressWarnings("unchecked")
-    <T> Supplier<T> create(Supplier<?> mc, Supplier<?> ri, Consumer<Optional<Throwable>> ex, boolean fade, ToIntFunction<float[]> scene) {
-        try {
-            return switch (kind()) {
-                case PORTAL -> (Supplier<T>) portal.orElseThrow().invoke(null, mc, ri, ex, scene);
-                case VANILLA -> {
-                    var constructor = vanilla.orElseThrow();
-                    yield () -> {
-                        try {
-                            return (T) constructor.newInstance(mc.get(), ri.get(), ex, fade);
-                        } catch (InvocationTargetException e) {
-                            throw new IllegalStateException("Не удалось создать экран загрузки Minecraft", e.getCause());
-                        } catch (ReflectiveOperationException e) {
-                            throw new IllegalStateException("Не удалось создать экран загрузки Minecraft", e);
-                        }
-                    };
-                }
-                case NONE -> throw new IllegalStateException("Не найден экран загрузки Minecraft: нет ни PortalOverlay KEK Link, ни LoadingOverlay");
-            };
-        } catch (InvocationTargetException e) {
-            throw new IllegalStateException("Не удалось создать экран загрузки KEK Link", e.getCause());
-        } catch (IllegalAccessException e) {
-            throw new IllegalStateException("Не удалось создать экран загрузки KEK Link", e);
-        }
+    private <T> Supplier<T> vanilla(Supplier<?> mc, Supplier<?> ri, Consumer<Optional<Throwable>> ex, boolean fade) {
+        return () -> {
+            try {
+                return (T) vanilla.orElseThrow(() -> new IllegalStateException("нет LoadingOverlay")).newInstance(mc.get(), ri.get(), ex, fade);
+            } catch (InvocationTargetException e) {
+                throw new IllegalStateException("Не удалось создать экран загрузки Minecraft", e.getCause());
+            } catch (ReflectiveOperationException e) {
+                throw new IllegalStateException("Не удалось создать экран загрузки Minecraft", e);
+            }
+        };
     }
 }

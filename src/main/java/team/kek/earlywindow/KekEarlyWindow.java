@@ -25,18 +25,22 @@ public class KekEarlyWindow implements ImmediateWindowProvider {
     public static final String FAIL_PROPERTY = "kek.earlywindow.fail";
     private static final Logger LOGGER = LoggerFactory.getLogger("KEK EARLYWINDOW");
 
-    private final ImmediateWindowProvider own;
+    private final Supplier<ImmediateWindowProvider> ownFactory;
     private final Supplier<ImmediateWindowProvider> fallbackFactory;
     private ImmediateWindowProvider active;
 
+    /** Окно создаётся только в {@link #initialize}: FML создаёт все провайдеры из classpath, и сбой здесь сорвал бы запуск. */
     public KekEarlyWindow() {
-        this(new PortalWindow(), DisplayWindow::new);
+        this(PortalWindow::new, DisplayWindow::new);
     }
 
     KekEarlyWindow(ImmediateWindowProvider own, Supplier<ImmediateWindowProvider> fallbackFactory) {
-        this.own = own;
+        this(() -> own, fallbackFactory);
+    }
+
+    KekEarlyWindow(Supplier<ImmediateWindowProvider> ownFactory, Supplier<ImmediateWindowProvider> fallbackFactory) {
+        this.ownFactory = ownFactory;
         this.fallbackFactory = fallbackFactory;
-        this.active = own;
     }
 
     @Override
@@ -50,7 +54,10 @@ public class KekEarlyWindow implements ImmediateWindowProvider {
             return fallBack(arguments, "задано " + FAIL_PROPERTY, null);
         }
         LOGGER.info("[KEK EARLYWINDOW] своё окно");
+        ImmediateWindowProvider own = null;
         try {
+            own = ownFactory.get();
+            active = own;
             return own.initialize(arguments);
         } catch (Throwable t) {
             if (own instanceof AutoCloseable closeable) {

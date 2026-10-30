@@ -42,6 +42,15 @@ class KekEarlyWindowFallbackTest {
     }
 
     @Test
+    void fallsBackWhenOwnCannotBeCreated() {
+        var fallback = new Fake(false);
+        new KekEarlyWindow(() -> {
+            throw new NoClassDefFoundError("org/lwjgl/Changed");
+        }, () -> fallback).initialize(new String[0]);
+        assertTrue(fallback.calls.contains("initialize"));
+    }
+
+    @Test
     void usesOwnWindowWhenItStarts() {
         var own = new Fake(false);
         var fallback = new Fake(false);
