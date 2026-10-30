@@ -11,3 +11,11 @@
 ```bash
 ./gradlew build    # build/libs/kek-earlywindow-<версия>.jar, jar воспроизводимый
 ```
+
+## Релиз
+
+Тег `v<версия>` (та же, что в `build.gradle.kts`) собирает jar и выкладывает его в GitHub Release. Лаунчер закрепляет версию и sha256 в своём `build.gradle.kts`.
+
+`-Dkek.earlywindow.fail=1` — проверка отката на стандартный экран, `-Dkek.earlywindow.animated=false` — градиент вместо сцены.
+
+Шейдер `scene.frag` — копия `scene()` из `scene.sksl` лаунчера между маркерами `BEGIN SCENE`/`END SCENE`; расхождение ловит `EarlyWindowShaderSyncTest` лаунчера.
